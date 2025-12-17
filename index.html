@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel 多模式自动过滤器</title>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', system-ui, sans-serif; padding: 20px; background-color: #f0f2f5; color: #1a1a1a; }
+        .container { max-width: 1100px; margin: 0 auto; }
+        .upload-section { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); text-align: center; margin-bottom: 25px; }
+        
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
+        .filter-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 5px solid #3498db; }
+        .card-NJ600 { border-top-color: #3498db; }
+        .card-PHL { border-top-color: #2ecc71; }
+        .card-BOS-PVD { border-top-color: #f1c40f; }
+        .card-BDL-CT { border-top-color: #e67e22; }
+
+        h3 { margin-top: 0; color: #2c3e50; font-size: 1.2em; }
+        .stat-item { margin: 10px 0; font-size: 0.9em; color: #666; }
+        .stat-item b { color: #333; font-size: 1.1em; }
+
+        .btn-group { display: flex; gap: 10px; margin-top: 15px; }
+        button { flex: 1; padding: 8px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; transition: 0.2s; }
+        .btn-copy { background: #ebf5ff; color: #007bff; border: 1px solid #007bff; }
+        .btn-copy:hover { background: #007bff; color: white; }
+        .btn-down { background: #007bff; color: white; }
+        .btn-down:hover { background: #0056b3; }
+
+        .tno-preview { 
+            width: 100%; height: 120px; margin-top: 15px; background: #f8f9fa; 
+            border: 1px solid #eee; border-radius: 4px; padding: 8px;
+            font-family: monospace; font-size: 12px; overflow-y: auto; white-space: pre;
+        }
+        .hidden { display: none; }
+        input[type="file"] { margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="upload-section">
+        <h2>🚀 Excel 多模式一键过滤</h2>
+        <p>只需上传 Excel，我们将自动按 4 种模式完成分类</p>
+        <input type="file" id="fileInput" accept=".xlsx, .xls" />
+    </div>
+
+    <div id="resultsGrid" class="grid-container hidden">
+        <div class="filter-card card-NJ600" id="res-NJ600">
+            <h3>NJ600</h3>
+            <div class="stat-item">总数: <b class="total">0</b></div>
+            <div class="stat-item">唯一TNO: <b class="unique">0</b></div>
+            <div class="tno-preview"></div>
+            <div class="btn-group">
+                <button class="btn-copy" onclick="copyTnos('NJ600')">复制TNO</button>
+                <button class="btn-down" onclick="downloadMode('NJ600')">下载Excel</button>
+            </div>
+        </div>
+
+        <div class="filter-card card-PHL" id="res-PHL">
+            <h3>PHL</h3>
+            <div class="stat-item">总数: <b class="total">0</b></div>
+            <div class="stat-item">唯一TNO: <b class="unique">0</b></div>
+            <div class="tno-preview"></div>
+            <div class="btn-group">
+                <button class="btn-copy" onclick="copyTnos('PHL')">复制TNO</button>
+                <button class="btn-down" onclick="downloadMode('PHL')">下载Excel</button>
+            </div>
+        </div>
+
+        <div class="filter-card card-BOS-PVD" id="res-BOS-PVD">
+            <h3>BOS + PVD</h3>
+            <div class="stat-item">总数: <b class="total">0</b></div>
+            <div class="stat-item">唯一TNO: <b class="unique">0</b></div>
+            <div class="tno-preview"></div>
+            <div class="btn-group">
+                <button class="btn-copy" onclick="copyTnos('BOS-PVD')">复制TNO</button>
+                <button class="btn-down" onclick="downloadMode('BOS-PVD')">下载Excel</button>
+            </div>
+        </div>
+
+        <div class="filter-card card-BDL-CT" id="res-BDL-CT">
+            <h3>BDL (CT)</h3>
+            <div class="stat-item">总数: <b class="total">0</b></div>
+            <div class="stat-item">唯一TNO: <b class="unique">0</b></div>
+            <div class="tno-preview"></div>
+            <div class="btn-group">
+                <button class="btn-copy" onclick="copyTnos('BDL-CT')">复制TNO</button>
+                <button class="btn-down" onclick="downloadMode('BDL-CT')">下载Excel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let allModeResults = {}; // 存储 4 种过滤结果
+
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            const data = new Uint8Array(evt.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+
+            if (jsonData.length === 0) return alert("文件为空");
+
+            // 查找列名
+            const findKey = (obj, target) => Object.keys(obj).find(k => k.toLowerCase().trim() === target);
+            const tnoKey = findKey(jsonData[0], 'tno');
+            const snKey = findKey(jsonData[0], 'service_number');
+
+            if (!tnoKey || !snKey) return alert("未找到 tno 或 service_number 列");
+
+            // 定义 4 种过滤逻辑
+            const filters = {
+                'NJ600': row => {
+                    const sn = parseInt(row[snKey]);
+                    return sn === 180992 || sn === 180993 || (sn >= 181011 && sn <= 181068);
+                },
+                'PHL': row => {
+                    const sn = parseInt(row[snKey]);
+                    return (sn >= 250001 && sn <= 250029) || (sn >= 250032 && sn <= 250049) || (sn >= 250990 && sn <= 250999);
+                },
+                'BOS-PVD': row => {
+                    const sn = parseInt(row[snKey]);
+                    const list = [390001, 390002, 390003, 390005, 390006, 390008, 390009, 390010, 390012, 390013, 390014, 390015, 390016, 390018, 390019, 390022, 390025, 390026, 390029, 390030, 390036, 390038, 390991, 390994, 390995];
+                    return list.includes(sn);
+                },
+                'BDL-CT': row => {
+                    const sn = parseInt(row[snKey]);
+                    return (sn >= 181070 && sn <= 181099);
+                }
+            };
+
+            // 执行过滤并渲染 UI
+            document.getElementById('resultsGrid').classList.remove('hidden');
+            
+            Object.keys(filters).forEach(mode => {
+                const filtered = jsonData.filter(filters[mode]);
+                const uniqueTnos = [...new Set(filtered.map(r => String(r[tnoKey]).trim()))].filter(v => v && v !== "undefined");
+                
+                // 存入全局变量
+                allModeResults[mode] = { rows: filtered, tnos: uniqueTnos };
+
+                // 更新 DOM
+                const card = document.getElementById(`res-${mode}`);
+                card.querySelector('.total').innerText = filtered.length;
+                card.querySelector('.unique').innerText = uniqueTnos.length;
+                card.querySelector('.tno-preview').innerText = uniqueTnos.join('\n');
+            });
+        };
+        reader.readAsArrayBuffer(file);
+    });
+
+    function copyTnos(mode) {
+        const text = allModeResults[mode].tnos.join('\n');
+        navigator.clipboard.writeText(text).then(() => alert(`${mode} TNO 已复制`));
+    }
+
+    function downloadMode(mode) {
+        const data = allModeResults[mode].rows;
+        if (data.length === 0) return alert("没有数据可供下载");
+        
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, mode);
+        
+        const dateStr = new Date().toLocaleDateString().replace(/\//g, '-');
+        XLSX.writeFile(wb, `${mode}_${dateStr}.xlsx`);
+    }
+</script>
+
+</body>
+</html>
