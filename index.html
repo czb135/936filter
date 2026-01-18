@@ -3,35 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Excel 多模式自动过滤器</title>
+    <title>Excel 多模式自动过滤器 (+司机号)</title>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', system-ui, sans-serif; padding: 20px; background-color: #f0f2f5; color: #1a1a1a; }
-        .container { max-width: 1100px; margin: 0 auto; }
+        .container { max-width: 1200px; margin: 0 auto; }
         .upload-section { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); text-align: center; margin-bottom: 25px; }
         
-        .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
         .filter-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 5px solid #3498db; }
+        
+        /* 各个卡片的颜色定义 */
         .card-NJ600 { border-top-color: #3498db; }
         .card-PHL { border-top-color: #2ecc71; }
         .card-BOS-PVD { border-top-color: #f1c40f; }
         .card-BDL-CT { border-top-color: #e67e22; }
+        .card-Driver { border-top-color: #9b59b6; } /* 新增：紫色给司机号 */
 
-        h3 { margin-top: 0; color: #2c3e50; font-size: 1.2em; }
+        h3 { margin-top: 0; color: #2c3e50; font-size: 1.1em; font-weight: 700; }
         .stat-item { margin: 10px 0; font-size: 0.9em; color: #666; }
         .stat-item b { color: #333; font-size: 1.1em; }
 
-        .btn-group { display: flex; gap: 10px; margin-top: 15px; }
-        button { flex: 1; padding: 8px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; transition: 0.2s; }
+        .btn-group { display: flex; gap: 8px; margin-top: 15px; }
+        button { flex: 1; padding: 8px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: 0.2s; }
         .btn-copy { background: #ebf5ff; color: #007bff; border: 1px solid #007bff; }
         .btn-copy:hover { background: #007bff; color: white; }
         .btn-down { background: #007bff; color: white; }
         .btn-down:hover { background: #0056b3; }
 
         .tno-preview { 
-            width: 100%; height: 120px; margin-top: 15px; background: #f8f9fa; 
+            width: 100%; height: 100px; margin-top: 15px; background: #f8f9fa; 
             border: 1px solid #eee; border-radius: 4px; padding: 8px;
-            font-family: monospace; font-size: 12px; overflow-y: auto; white-space: pre;
+            font-family: monospace; font-size: 11px; overflow-y: auto; white-space: pre;
+            box-sizing: border-box;
         }
         .hidden { display: none; }
         input[type="file"] { margin-top: 15px; }
@@ -41,8 +45,8 @@
 
 <div class="container">
     <div class="upload-section">
-        <h2>🚀 Excel 多模式一键过滤</h2>
-        <p>只需上传 Excel，我们将自动按 4 种模式完成分类</p>
+        <h2>🚀 Excel 多模式一键过滤 (+司机号)</h2>
+        <p>支持筛选：NJ600, PHL, BOS/PVD, BDL 以及 <b>5位司机号</b></p>
         <input type="file" id="fileInput" accept=".xlsx, .xls" />
     </div>
 
@@ -90,11 +94,22 @@
                 <button class="btn-down" onclick="downloadMode('BDL-CT')">下载Excel</button>
             </div>
         </div>
+
+        <div class="filter-card card-Driver" id="res-Driver">
+            <h3>司机号 (5位数)</h3>
+            <div class="stat-item">总数: <b class="total">0</b></div>
+            <div class="stat-item">唯一TNO: <b class="unique">0</b></div>
+            <div class="tno-preview"></div>
+            <div class="btn-group">
+                <button class="btn-copy" onclick="copyTnos('Driver')">复制TNO</button>
+                <button class="btn-down" onclick="downloadMode('Driver')">下载Excel</button>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
-    let allModeResults = {}; // 存储 4 种过滤结果
+    let allModeResults = {}; // 存储所有过滤结果
 
     document.getElementById('fileInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
@@ -104,18 +119,19 @@
         reader.onload = function(evt) {
             const data = new Uint8Array(evt.target.result);
             const workbook = XLSX.read(data, {type: 'array'});
-            const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+            const sheetName = workbook.SheetNames[0];
+            const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
             if (jsonData.length === 0) return alert("文件为空");
 
-            // 查找列名
+            // 查找列名 (忽略大小写)
             const findKey = (obj, target) => Object.keys(obj).find(k => k.toLowerCase().trim() === target);
             const tnoKey = findKey(jsonData[0], 'tno');
             const snKey = findKey(jsonData[0], 'service_number');
 
             if (!tnoKey || !snKey) return alert("未找到 tno 或 service_number 列");
 
-            // 定义 4 种过滤逻辑
+            // === 核心过滤逻辑定义 ===
             const filters = {
                 'NJ600': row => {
                     const sn = parseInt(row[snKey]);
@@ -133,6 +149,12 @@
                 'BDL-CT': row => {
                     const sn = parseInt(row[snKey]);
                     return (sn >= 181070 && sn <= 181099);
+                },
+                // === 新增：司机号筛选 (5位数) ===
+                'Driver': row => {
+                    const sn = parseInt(row[snKey]);
+                    // 逻辑：必须是数字，且在 10000 到 99999 之间
+                    return !isNaN(sn) && sn >= 10000 && sn <= 99999;
                 }
             };
 
@@ -141,36 +163,45 @@
             
             Object.keys(filters).forEach(mode => {
                 const filtered = jsonData.filter(filters[mode]);
+                // 获取唯一TNO
                 const uniqueTnos = [...new Set(filtered.map(r => String(r[tnoKey]).trim()))].filter(v => v && v !== "undefined");
                 
                 // 存入全局变量
                 allModeResults[mode] = { rows: filtered, tnos: uniqueTnos };
 
-                // 更新 DOM
+                // 更新 DOM (根据 ID 找到对应卡片)
                 const card = document.getElementById(`res-${mode}`);
-                card.querySelector('.total').innerText = filtered.length;
-                card.querySelector('.unique').innerText = uniqueTnos.length;
-                card.querySelector('.tno-preview').innerText = uniqueTnos.join('\n');
+                if (card) {
+                    card.querySelector('.total').innerText = filtered.length;
+                    card.querySelector('.unique').innerText = uniqueTnos.length;
+                    card.querySelector('.tno-preview').innerText = uniqueTnos.join('\n');
+                }
             });
         };
         reader.readAsArrayBuffer(file);
     });
 
     function copyTnos(mode) {
+        if (!allModeResults[mode] || allModeResults[mode].tnos.length === 0) return alert("没有数据可复制");
         const text = allModeResults[mode].tnos.join('\n');
-        navigator.clipboard.writeText(text).then(() => alert(`${mode} TNO 已复制`));
+        navigator.clipboard.writeText(text).then(() => {
+            const btn = document.querySelector(`#res-${mode} .btn-copy`);
+            const originalText = btn.innerText;
+            btn.innerText = "已复制!";
+            setTimeout(() => btn.innerText = originalText, 1500);
+        });
     }
 
     function downloadMode(mode) {
+        if (!allModeResults[mode] || allModeResults[mode].rows.length === 0) return alert("没有数据可供下载");
         const data = allModeResults[mode].rows;
-        if (data.length === 0) return alert("没有数据可供下载");
         
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, mode);
         
         const dateStr = new Date().toLocaleDateString().replace(/\//g, '-');
-        XLSX.writeFile(wb, `${mode}_${dateStr}.xlsx`);
+        XLSX.writeFile(wb, `${mode}_筛选结果_${dateStr}.xlsx`);
     }
 </script>
 
