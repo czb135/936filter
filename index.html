@@ -18,7 +18,7 @@
         .card-PHL { border-top-color: #2ecc71; }
         .card-BOS-PVD { border-top-color: #f1c40f; }
         .card-BDL-CT { border-top-color: #e67e22; }
-        .card-Driver { border-top-color: #9b59b6; } /* 新增：紫色给司机号 */
+        .card-Driver { border-top-color: #9b59b6; } /* 司机号 */
 
         h3 { margin-top: 0; color: #2c3e50; font-size: 1.1em; font-weight: 700; }
         .stat-item { margin: 10px 0; font-size: 0.9em; color: #666; }
@@ -46,7 +46,7 @@
 <div class="container">
     <div class="upload-section">
         <h2>🚀 Excel 多模式一键过滤 (+司机号)</h2>
-        <p>支持筛选：NJ600, PHL, BOS/PVD, BDL 以及 <b>5位司机号</b></p>
+        <p>支持筛选：NJ600, PHL, BOS/PVD, BDL 以及 <b>5位/7位司机号</b></p>
         <input type="file" id="fileInput" accept=".xlsx, .xls" />
     </div>
 
@@ -96,7 +96,7 @@
         </div>
 
         <div class="filter-card card-Driver" id="res-Driver">
-            <h3>司机号 (5位数)</h3>
+            <h3>司机号 (5位/7位)</h3>
             <div class="stat-item">总数: <b class="total">0</b></div>
             <div class="stat-item">唯一TNO: <b class="unique">0</b></div>
             <div class="tno-preview"></div>
@@ -150,11 +150,14 @@
                     const sn = parseInt(row[snKey]);
                     return (sn >= 181070 && sn <= 181099);
                 },
-                // === 新增：司机号筛选 (5位数) ===
+                // === 更新：司机号筛选 (5位数或7位数) ===
                 'Driver': row => {
                     const sn = parseInt(row[snKey]);
-                    // 逻辑：必须是数字，且在 10000 到 99999 之间
-                    return !isNaN(sn) && sn >= 10000 && sn <= 99999;
+                    // 逻辑：必须是数字，且为 5位数(10000-99999) 或 7位数(1000000-9999999)
+                    return !isNaN(sn) && (
+                        (sn >= 10000 && sn <= 99999) || 
+                        (sn >= 1000000 && sn <= 9999999)
+                    );
                 }
             };
 
