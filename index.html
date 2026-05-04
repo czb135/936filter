@@ -46,7 +46,7 @@
 <div class="container">
     <div class="upload-section">
         <h2>🚀 Excel 多模式一键过滤 (+司机号)</h2>
-        <p>支持筛选：NJ600, PHL, BOS/PVD, BDL 以及 <b>5位/7位司机号</b></p>
+        <p>支持筛选：NJ600, PHL, BOS/PVD, BDL 以及 <b>5位/7位司机号 (仅限 NJ Warehouse)</b></p>
         <input type="file" id="fileInput" accept=".xlsx, .xls" />
     </div>
 
@@ -96,7 +96,7 @@
         </div>
 
         <div class="filter-card card-Driver" id="res-Driver">
-            <h3>司机号 (5位/7位)</h3>
+            <h3>司机号 (NJ Warehouse)</h3>
             <div class="stat-item">总数: <b class="total">0</b></div>
             <div class="stat-item">唯一TNO: <b class="unique">0</b></div>
             <div class="tno-preview"></div>
@@ -128,8 +128,10 @@
             const findKey = (obj, target) => Object.keys(obj).find(k => k.toLowerCase().trim() === target);
             const tnoKey = findKey(jsonData[0], 'tno');
             const snKey = findKey(jsonData[0], 'service_number');
+            const warehouseKey = findKey(jsonData[0], 'warehouse'); // 新增：查找 warehouse 列
 
             if (!tnoKey || !snKey) return alert("未找到 tno 或 service_number 列");
+            if (!warehouseKey) alert("注意：未找到 warehouse 列，司机号筛选将无法匹配仓库信息！");
 
             // === 核心过滤逻辑定义 ===
             const filters = {
@@ -150,14 +152,25 @@
                     const sn = parseInt(row[snKey]);
                     return (sn >= 181070 && sn <= 181099);
                 },
-                // === 更新：司机号筛选 (5位数或7位数) ===
+                // === 更新：司机号筛选 (5位数或7位数) 且 warehouse 为 NJ Warehouse ===
                 'Driver': row => {
                     const sn = parseInt(row[snKey]);
-                    // 逻辑：必须是数字，且为 5位数(10000-99999) 或 7位数(1000000-9999999)
-                    return !isNaN(sn) && (
+                    
+                    // 1. 验证司机号格式
+                    const isValidDriverNum = !isNaN(sn) && (
                         (sn >= 10000 && sn <= 99999) || 
                         (sn >= 1000000 && sn <= 9999999)
                     );
+
+                    // 2. 验证仓库是否为 NJ Warehouse (转换为小写进行匹配以防止大小写输入不一致)
+                    let isNJWarehouse = false;
+                    if (warehouseKey && row[warehouseKey]) {
+                        const warehouseVal = String(row[warehouseKey]).trim().toLowerCase();
+                        isNJWarehouse = (warehouseVal === 'nj warehouse');
+                    }
+
+                    // 必须同时满足司机号格式正确，且属于 NJ Warehouse
+                    return isValidDriverNum && isNJWarehouse;
                 }
             };
 
