@@ -46,7 +46,7 @@
 <div class="container">
     <div class="upload-section">
         <h2>🚀 Excel 多模式一键过滤 (+司机号)</h2>
-        <p>支持筛选：NJ600, PHL, BOS/PVD, BDL 以及 <b>5位/7位司机号 (仅限 NJ Warehouse)</b></p>
+        <p>支持筛选：NJ600, PHL, BOS/PVD, BDL 以及 <b>4位/5位/7位司机号 (仅限 NJ Warehouse)</b></p>
         <input type="file" id="fileInput" accept=".xlsx, .xls" />
     </div>
 
@@ -159,7 +159,8 @@
                     // 1. 验证司机号格式
                     const isValidDriverNum = !isNaN(sn) && (
                         (sn >= 10000 && sn <= 99999) || 
-                        (sn >= 1000000 && sn <= 9999999)
+                        (sn >= 10000 && sn <= 99999) ||     // 5位司机号
+                        (sn >= 1000000 && sn <= 9999999)  
                     );
 
                     // 2. 验证仓库是否为 NJ Warehouse (转换为小写进行匹配以防止大小写输入不一致)
